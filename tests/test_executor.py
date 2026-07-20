@@ -1,11 +1,11 @@
-"""Tests for zotero_arxiv_daily.executor: normalize_path_patterns, filter_corpus, fetch_zotero_corpus, E2E."""
+"""Tests for zotero_arxiv_daily.executor: normalize_path_patterns, filter_corpus, fetch_mendeley_corpus, E2E."""
 
 from datetime import datetime
 
 import pytest
 from omegaconf import OmegaConf
 
-from zotero_arxiv_daily.executor import Executor, normalize_path_patterns
+from zotero_arxiv_daily.executor import Executor, has_llm_api_key, normalize_path_patterns
 from zotero_arxiv_daily.protocol import CorpusPaper
 
 
@@ -15,7 +15,7 @@ from zotero_arxiv_daily.protocol import CorpusPaper
 
 
 def test_normalize_path_patterns_rejects_single_string_for_include_path():
-    with pytest.raises(TypeError, match="config.zotero.include_path must be a list"):
+    with pytest.raises(TypeError, match="config.mendeley.include_path must be a list"):
         normalize_path_patterns("2026/survey/**", "include_path")
 
 
@@ -28,7 +28,7 @@ def test_normalize_path_patterns_accepts_list_config_for_include_path():
 
 
 def test_normalize_path_patterns_rejects_single_string_for_ignore_path():
-    with pytest.raises(TypeError, match="config.zotero.ignore_path must be a list"):
+    with pytest.raises(TypeError, match="config.mendeley.ignore_path must be a list"):
         normalize_path_patterns("archive/**", "ignore_path")
 
 
@@ -43,6 +43,22 @@ def test_normalize_path_patterns_accepts_empty_list():
 
 def test_normalize_path_patterns_accepts_none():
     assert normalize_path_patterns(None, "include_path") is None
+
+
+def test_has_llm_api_key_accepts_only_non_empty_keys(config):
+    from omegaconf import open_dict
+
+    with open_dict(config):
+        config.llm.api.key = "sk-test"
+    assert has_llm_api_key(config)
+
+    with open_dict(config):
+        config.llm.api.key = ""
+    assert not has_llm_api_key(config)
+
+    with open_dict(config):
+        config.llm.api.key = None
+    assert not has_llm_api_key(config)
 
 
 # ---------------------------------------------------------------------------
@@ -100,47 +116,72 @@ def test_filter_corpus_no_filters_returns_all():
 
 
 # ---------------------------------------------------------------------------
-# fetch_zotero_corpus
+# fetch_mendeley_corpus
 # ---------------------------------------------------------------------------
 
 
-def test_fetch_zotero_corpus(config, monkeypatch):
-    from tests.canned_responses import make_stub_zotero_client
+def test_fetch_mendeley_corpus(config, monkeypatch):
+    from tests.canned_responses import make_stub_mendeley_client
 
-    stub_zot = make_stub_zotero_client()
-    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+    stub_mendeley = make_stub_mendeley_client()
 
     executor = Executor.__new__(Executor)
     executor.config = config
-    corpus = executor.fetch_zotero_corpus()
+    executor.mendeley_client = stub_mendeley
+    corpus = executor.fetch_mendeley_corpus()
 
     assert len(corpus) == 2
     assert corpus[0].title == "Stub Paper 1"
     assert "survey/topic-a" in corpus[0].paths[0]
 
 
-def test_fetch_zotero_corpus_paper_with_zero_collections(config, monkeypatch):
-    from tests.canned_responses import make_stub_zotero_client
+def test_fetch_mendeley_corpus_paper_with_zero_folders(config):
+    from tests.canned_responses import make_stub_mendeley_client
 
-    items = [
+    documents = [
         {
-            "data": {
-                "title": "No Collection Paper",
-                "abstractNote": "Abstract.",
-                "dateAdded": "2026-03-01T00:00:00Z",
-                "collections": [],
-            }
+            "id": "DOC3",
+            "title": "No Folder Paper",
+            "abstract": "Abstract.",
+            "created": "2026-03-01T00:00:00.000Z",
         }
     ]
-    stub_zot = make_stub_zotero_client(items=items)
-    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+    stub_mendeley = make_stub_mendeley_client(documents=documents, folder_documents={})
 
     executor = Executor.__new__(Executor)
     executor.config = config
-    corpus = executor.fetch_zotero_corpus()
+    executor.mendeley_client = stub_mendeley
+    corpus = executor.fetch_mendeley_corpus()
 
     assert len(corpus) == 1
     assert corpus[0].paths == []
+
+
+def test_fetch_mendeley_corpus_skips_documents_without_abstract(config):
+    from tests.canned_responses import make_stub_mendeley_client
+
+    documents = [
+        {
+            "id": "DOC1",
+            "title": "Has Abstract",
+            "abstract": "Abstract.",
+            "created": "2026-03-01T00:00:00.000Z",
+        },
+        {
+            "id": "DOC2",
+            "title": "No Abstract",
+            "abstract": "",
+            "created": "2026-03-02T00:00:00.000Z",
+        },
+    ]
+    stub_mendeley = make_stub_mendeley_client(documents=documents, folder_documents={})
+
+    executor = Executor.__new__(Executor)
+    executor.config = config
+    executor.mendeley_client = stub_mendeley
+    corpus = executor.fetch_mendeley_corpus()
+
+    assert [paper.title for paper in corpus] == ["Has Abstract"]
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +190,7 @@ def test_fetch_zotero_corpus_paper_with_zero_collections(config, monkeypatch):
 
 
 def test_run_end_to_end(config, monkeypatch):
-    """Full pipeline: Zotero fetch -> filter -> retrieve -> rerank -> TLDR -> email."""
+    """Full pipeline: Mendeley fetch -> filter -> retrieve -> rerank -> TLDR -> email."""
     import smtplib
 
     from omegaconf import open_dict
@@ -159,7 +200,7 @@ def test_run_end_to_end(config, monkeypatch):
         make_sample_paper,
         make_stub_openai_client,
         make_stub_smtp,
-        make_stub_zotero_client,
+        make_stub_mendeley_client,
     )
 
     # Config: source=["arxiv"], reranker="api", send_empty=false
@@ -168,9 +209,9 @@ def test_run_end_to_end(config, monkeypatch):
         config.executor.reranker = "api"
         config.executor.send_empty = False
 
-    # 1. Stub pyzotero
-    stub_zot = make_stub_zotero_client()
-    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+    # 1. Stub Mendeley
+    stub_mendeley = make_stub_mendeley_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.MendeleyClient.from_config", lambda config: stub_mendeley)
 
     # 2. Stub OpenAI (for reranker + TLDR/affiliations)
     stub_client = make_stub_openai_client()
@@ -215,15 +256,15 @@ def test_run_no_papers_send_empty_false(config, monkeypatch):
 
     from omegaconf import open_dict
 
-    from tests.canned_responses import make_stub_openai_client, make_stub_smtp, make_stub_zotero_client
+    from tests.canned_responses import make_stub_openai_client, make_stub_smtp, make_stub_mendeley_client
 
     with open_dict(config):
         config.executor.source = ["arxiv"]
         config.executor.reranker = "api"
         config.executor.send_empty = False
 
-    stub_zot = make_stub_zotero_client()
-    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+    stub_mendeley = make_stub_mendeley_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.MendeleyClient.from_config", lambda config: stub_mendeley)
 
     stub_client = make_stub_openai_client()
     monkeypatch.setattr("zotero_arxiv_daily.executor.OpenAI", lambda **kw: stub_client)
@@ -251,15 +292,15 @@ def test_run_no_papers_send_empty_true(config, monkeypatch):
 
     from omegaconf import open_dict
 
-    from tests.canned_responses import make_stub_openai_client, make_stub_smtp, make_stub_zotero_client
+    from tests.canned_responses import make_stub_openai_client, make_stub_smtp, make_stub_mendeley_client
 
     with open_dict(config):
         config.executor.source = ["arxiv"]
         config.executor.reranker = "api"
         config.executor.send_empty = True
 
-    stub_zot = make_stub_zotero_client()
-    monkeypatch.setattr("zotero_arxiv_daily.executor.zotero.Zotero", lambda *a, **kw: stub_zot)
+    stub_mendeley = make_stub_mendeley_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.MendeleyClient.from_config", lambda config: stub_mendeley)
 
     stub_client = make_stub_openai_client()
     monkeypatch.setattr("zotero_arxiv_daily.executor.OpenAI", lambda **kw: stub_client)
@@ -281,3 +322,86 @@ def test_run_no_papers_send_empty_true(config, monkeypatch):
     assert len(sent) == 1, "Email should be sent even with no papers when send_empty=true"
     _, _, body = sent[0]
     assert "text/html" in body
+
+
+def test_run_skips_tldr_and_affiliations_when_openai_key_missing(config, monkeypatch):
+    """The feed still sends ranked papers when LLM enrichment is disabled."""
+    import smtplib
+
+    from omegaconf import open_dict
+
+    from tests.canned_responses import make_sample_paper, make_stub_smtp, make_stub_mendeley_client
+
+    with open_dict(config):
+        config.executor.source = ["arxiv"]
+        config.executor.reranker = "api"
+        config.executor.send_empty = False
+        config.llm.api.key = None
+
+    stub_mendeley = make_stub_mendeley_client()
+    monkeypatch.setattr("zotero_arxiv_daily.executor.MendeleyClient.from_config", lambda config: stub_mendeley)
+
+    def fail_openai_constructor(**kwargs):
+        raise AssertionError("OpenAI should not be constructed without an LLM API key")
+
+    monkeypatch.setattr("zotero_arxiv_daily.executor.OpenAI", fail_openai_constructor)
+
+    from tests.canned_responses import make_stub_openai_client
+
+    stub_client = make_stub_openai_client()
+    monkeypatch.setattr("zotero_arxiv_daily.reranker.api.OpenAI", lambda **kw: stub_client)
+
+    retrieved = [make_sample_paper(title="No LLM Paper", score=None)]
+
+    import zotero_arxiv_daily.retriever.arxiv_retriever  # noqa: F401
+
+    from zotero_arxiv_daily.retriever.base import registered_retrievers
+
+    monkeypatch.setattr(registered_retrievers["arxiv"], "retrieve_papers", lambda self: retrieved)
+
+    sent = []
+    monkeypatch.setattr(smtplib, "SMTP", make_stub_smtp(sent))
+    monkeypatch.setattr("zotero_arxiv_daily.retriever.base.sleep", lambda _: None)
+
+    executor = Executor(config)
+    executor.run()
+
+    assert len(sent) == 1
+    assert retrieved[0].tldr is None
+    assert retrieved[0].affiliations is None
+
+
+def test_retrieve_and_rerank_by_source_applies_top_k_and_deduplicates(config):
+    from types import SimpleNamespace
+
+    from omegaconf import open_dict
+
+    from tests.canned_responses import make_sample_corpus, make_sample_paper
+    from zotero_arxiv_daily.history import RecommendationHistory
+
+    with open_dict(config):
+        config.executor.per_source_top_k = {"huggingface_trending": 1, "arxiv_weekly": 2}
+
+    shared_hf = make_sample_paper(source="huggingface_trending", source_id="2607.00001", title="Shared HF")
+    shared_arxiv = make_sample_paper(source="arxiv_weekly", source_id="2607.00001", title="Shared arXiv")
+    arxiv_only = make_sample_paper(source="arxiv_weekly", source_id="2607.00002", title="arXiv Only")
+
+    executor = Executor.__new__(Executor)
+    executor.config = config
+    executor.history = RecommendationHistory(None)
+    executor.retrievers = {
+        "huggingface_trending": SimpleNamespace(retrieve_papers=lambda: [shared_hf]),
+        "arxiv_weekly": SimpleNamespace(retrieve_papers=lambda: [shared_arxiv, arxiv_only]),
+    }
+
+    class StubReranker:
+        def rerank(self, papers, corpus):
+            for index, paper in enumerate(papers):
+                paper.score = 10 - index
+            return papers
+
+    executor.reranker = StubReranker()
+
+    selected = executor.retrieve_and_rerank_by_source(make_sample_corpus())
+
+    assert [paper.title for paper in selected] == ["Shared HF", "arXiv Only"]

@@ -24,10 +24,13 @@ def _base_config():
         cfg = compose(
             config_name="default",
             overrides=[
-                "zotero.user_id=000000",
-                "zotero.api_key=fake-zotero-key",
-                "zotero.include_path=null",
-                "zotero.ignore_path=null",
+                "mendeley.client_id=fake-client-id",
+                "mendeley.client_secret=fake-client-secret",
+                "mendeley.refresh_token=fake-refresh-token",
+                "mendeley.access_token=fake-access-token",
+                "mendeley.redirect_uri=null",
+                "mendeley.include_path=null",
+                "mendeley.ignore_path=null",
                 "email.sender=test@example.com",
                 "email.receiver=test@example.com",
                 "email.smtp_server=localhost",
@@ -44,6 +47,7 @@ def _base_config():
                 "executor.reranker=api",
                 "executor.debug=false",
                 "executor.send_empty=false",
+                "executor.history_path=null",
             ],
         )
     return cfg

@@ -3,7 +3,7 @@
  <img width=200px height=200px src="assets/logo.svg" alt="logo"></a>
 </p>
 
-<h3 align="center">Zotero-arXiv-Daily</h3>
+<h3 align="center">Mendeley-arXiv-Daily</h3>
 
 <div align="center">
 
@@ -18,7 +18,7 @@
 
 ---
 
-<p align="center"> Recommend new arxiv papers of your interest daily according to your Zotero library.
+<p align="center"> Recommend new arxiv papers of your interest daily according to your Mendeley library.
     <br> 
 </p>
 
@@ -29,7 +29,7 @@
 
 > Track new scientific researches of your interest by just forking (and staring) this repo!😊
 
-*Zotero-arXiv-Daily* finds arxiv papers that may attract you based on the context of your Zotero library, and then sends the result to your mailbox📮. It can be deployed as Github Action Workflow with **zero cost**, **no installation**, and **few configuration** of Github Action environment variables for daily **automatic** delivery.
+*Mendeley-arXiv-Daily* finds arxiv papers that may attract you based on the context of your Mendeley library, and then sends the result to your mailbox📮. It can be deployed as Github Action Workflow with **zero cost**, **no installation**, and **few configuration** of Github Action environment variables for daily **automatic** delivery.
 
 ## ✨ Features
 - Totally free! All the calculation can be done in the Github Action runner locally within its quota (for public repo).
@@ -39,7 +39,7 @@
 - List of papers sorted by relevance with your recent research interest.
 - Fast deployment via fork this repo and set environment variables in the Github Action Page.
 - Support LLM API for generating TL;DR of papers.
-- Ignore unwanted Zotero papers using a list of glob patterns.
+- Ignore unwanted Mendeley papers using a list of folder glob patterns.
 - Support multiple sources of papers to retrieve:
   - arxiv
   - biorxiv
@@ -60,22 +60,27 @@ Below are all the secrets you need to set. They are invisible to anyone includin
 
 | Key |Description | Example |
 | :---  | :---  | :--- |
-| ZOTERO_ID  | User ID of your Zotero account. **User ID is not your username, but a sequence of numbers**Get your ID from [here](https://www.zotero.org/settings/security). You can find it at the position shown in this [screenshot](https://github.com/TideDra/zotero-arxiv-daily/blob/main/assets/userid.png). | 12345678  |
-| ZOTERO_KEY | An Zotero API key with read access. Get a key from [here](https://www.zotero.org/settings/security).  | AB5tZ877P2j7Sm2Mragq041H   |
+| MENDELEY_CLIENT_ID | Mendeley application/client ID from the Mendeley developer portal. | 123456 |
+| MENDELEY_CLIENT_SECRET | Mendeley application/client secret. | xzcdoG8wmRrf7Npm |
+| MENDELEY_REFRESH_TOKEN | OAuth refresh token for your Mendeley account. | MSwxMDM... |
+| MENDELEY_REDIRECT_URI | Optional OAuth redirect URI if your Mendeley app requires it for token refresh. | http://localhost/callback |
 | SENDER | The email account of the SMTP server that sends you email. | abc@qq.com |
 | SENDER_PASSWORD | The password of the sender account. Note that it's not necessarily the password for logging in the e-mail client, but the authentication code for SMTP service. Ask your email provider for this.   | abcdefghijklmn |
 | RECEIVER | The e-mail address that receives the paper list. | abc@outlook.com |
-| OPENAI_API_KEY | API Key when using the API to access LLMs. You can get FREE API for using advanced open source LLMs in [SiliconFlow](https://cloud.siliconflow.cn/i/b3XhBRAm). | sk-xxx |
-| OPENAI_API_BASE | API URL when using the API to access LLMs. | https://api.siliconflow.cn/v1 |
+| OPENAI_API_KEY | Optional API key for TLDR and affiliation generation. If omitted, the app skips those fields. | sk-xxx |
+| OPENAI_API_BASE | Optional API URL when using the API to access LLMs. | https://api.openai.com/v1 |
 
 Then you should also set a public variable `CUSTOM_CONFIG` for your custom configuration.
 ![vars](./assets/repo_var.png)
 ![custom_config](./assets/config_var.png)
 Paste the following content into the value of `CUSTOM_CONFIG` variable:
 ```yaml
-zotero:
-  user_id: ${oc.env:ZOTERO_ID}
-  api_key: ${oc.env:ZOTERO_KEY}
+mendeley:
+  client_id: ${oc.env:MENDELEY_CLIENT_ID}
+  client_secret: ${oc.env:MENDELEY_CLIENT_SECRET}
+  refresh_token: ${oc.env:MENDELEY_REFRESH_TOKEN}
+  access_token: ${oc.env:MENDELEY_ACCESS_TOKEN,null}
+  redirect_uri: ${oc.env:MENDELEY_REDIRECT_URI,null}
   include_path: null # Or e.g. ["2026/survey/**", "2026/reading-group/**"]
 
 email:
@@ -87,8 +92,8 @@ email:
 
 llm:
   api:
-    key: ${oc.env:OPENAI_API_KEY}
-    base_url: ${oc.env:OPENAI_API_BASE}
+    key: ${oc.env:OPENAI_API_KEY,null}
+    base_url: ${oc.env:OPENAI_API_BASE,https://api.openai.com/v1}
   generation_kwargs:
     model: gpt-4o-mini
 
@@ -107,10 +112,16 @@ Set `source.arxiv.include_cross_list: true` if you want cross-listed papers incl
 
 Here is the full configuration, `???` means the value must be filled in:
 ```yaml
-zotero:
-  user_id: ??? # User ID of your Zotero account.
-  api_key: ??? # An Zotero API key with read access.
-  include_path: null # A list of glob patterns marking the Zotero collections that should be included. Example: ["2026/survey/**", "2026/reading-group/**"]
+mendeley:
+  client_id: ??? # Mendeley application/client ID.
+  client_secret: ??? # Mendeley application/client secret.
+  refresh_token: ??? # OAuth refresh token for your Mendeley account.
+  access_token: null # Optional short-lived access token for one-off runs. Leave null for refresh-token based automation.
+  redirect_uri: null # Optional OAuth redirect URI.
+  api_base_url: https://api.mendeley.com
+  token_url: https://api.mendeley.com/oauth/token
+  include_path: null # A list of glob patterns marking the Mendeley folders that should be included. Example: ["2026/survey/**", "2026/reading-group/**"]
+  ignore_path: null # A list of glob patterns marking the Mendeley folders that should be excluded. Example: ["2026/ignore/**", "archive/**"]
 
 source:
   arxiv:
@@ -130,8 +141,8 @@ email:
 
 llm:
   api:
-    key: ??? # API Key of your LLM API. Example: sk-xxx
-    base_url: ??? # API URL of your LLM API. Example: https://api.openai.com/v1
+    key: null # Optional API key for TLDR and affiliation generation. If null, LLM enrichment is skipped. Example: sk-xxx
+    base_url: https://api.openai.com/v1 # API URL of your LLM API. Example: https://api.openai.com/v1
   generation_kwargs:
   # Arguments for the LLM API. See [here](https://platform.openai.com/docs/api-reference/chat/create) for more details.
     max_tokens: 16384
@@ -173,7 +184,9 @@ By default, the main workflow runs on 22:00 UTC everyday. You can change this ti
 Supported by [uv](https://github.com/astral-sh/uv), this workflow can easily run on your local device if uv is installed:
 ```bash
 # set all the environment variables
-# export ZOTERO_ID=xxxx
+# export MENDELEY_CLIENT_ID=xxxx
+# export MENDELEY_CLIENT_SECRET=xxxx
+# export MENDELEY_REFRESH_TOKEN=xxxx
 # ...
 cd zotero-arxiv-daily
 uv run main.py
@@ -186,7 +199,7 @@ This project is in active development. You can subscribe this repo via `Watch` s
 
 
 ## 📖 How it works
-*Zotero-arXiv-Daily* firstly retrieves all the papers in your Zotero library and all the papers released in the previous day, via corresponding API. Then it calculates the embedding of each paper's abstract via an embedding model. The score of a paper is its weighted average similarity over all your Zotero papers (newer paper added to the library has higher weight). The TLDR of each paper is generated by LLM, given the text extracted by pymupdf4llm.
+*Mendeley-arXiv-Daily* firstly retrieves all the papers in your Mendeley library and all the papers released in the previous day, via corresponding API. Then it calculates the embedding of each paper's abstract via an embedding model. The score of a paper is its weighted average similarity over all your Mendeley papers (newer paper added to the library has higher weight). The TLDR of each paper is generated by LLM, given the text extracted by pymupdf4llm.
 
 ## 📌 Limitations
 - The recommendation algorithm is very simple, it may not accurately reflect your interest. Welcome better ideas for improving the algorithm!
@@ -197,7 +210,7 @@ This project is in active development. You can subscribe this repo via `Watch` s
 Distributed under the AGPLv3 License. See `LICENSE` for detail.
 
 ## ❤️ Acknowledgement
-- [pyzotero](https://github.com/urschrei/pyzotero)
+- [Mendeley API](https://dev.mendeley.com/)
 - [arxiv](https://github.com/lukasschwab/arxiv.py)
 - [sentence_transformers](https://github.com/UKPLab/sentence-transformers)
 

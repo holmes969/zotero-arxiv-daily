@@ -64,64 +64,62 @@ def make_stub_openai_client():
 
 
 # ---------------------------------------------------------------------------
-# Zotero client stub
+# Mendeley client stub
 # ---------------------------------------------------------------------------
 
-_DEFAULT_COLLECTIONS = [
+_DEFAULT_FOLDERS = [
+    {"id": "FOL1", "name": "survey"},
+    {"id": "FOL2", "name": "topic-a", "parent_id": "FOL1"},
+]
+
+_DEFAULT_DOCUMENTS = [
     {
-        "key": "COL1",
-        "data": {"name": "survey", "parentCollection": False},
+        "id": "DOC1",
+        "title": "Stub Paper 1",
+        "abstract": "Abstract of stub paper 1.",
+        "created": "2026-01-15T10:00:00.000Z",
     },
     {
-        "key": "COL2",
-        "data": {"name": "topic-a", "parentCollection": "COL1"},
+        "id": "DOC2",
+        "title": "Stub Paper 2",
+        "abstract": "Abstract of stub paper 2.",
+        "created": "2026-02-20T12:00:00.000Z",
     },
 ]
 
-_DEFAULT_ITEMS = [
-    {
-        "data": {
-            "title": "Stub Paper 1",
-            "abstractNote": "Abstract of stub paper 1.",
-            "dateAdded": "2026-01-15T10:00:00Z",
-            "collections": ["COL2"],
-        },
-    },
-    {
-        "data": {
-            "title": "Stub Paper 2",
-            "abstractNote": "Abstract of stub paper 2.",
-            "dateAdded": "2026-02-20T12:00:00Z",
-            "collections": ["COL1"],
-        },
-    },
-]
+_DEFAULT_FOLDER_DOCUMENTS = {
+    "FOL1": ["DOC2"],
+    "FOL2": ["DOC1"],
+}
 
 
-def make_stub_zotero_client(collections=None, items=None):
-    """Return a SimpleNamespace that quacks like pyzotero.zotero.Zotero.
+def make_stub_mendeley_client(documents=None, folders=None, folder_documents=None, use_starred_only=False):
+    """Return a SimpleNamespace that quacks like MendeleyClient."""
+    docs = documents if documents is not None else _DEFAULT_DOCUMENTS
+    flds = folders if folders is not None else _DEFAULT_FOLDERS
+    memberships = folder_documents if folder_documents is not None else _DEFAULT_FOLDER_DOCUMENTS
 
-    Supports the call patterns used by Executor.fetch_zotero_corpus():
-        zot.everything(zot.collections())
-        zot.everything(zot.items(itemType=...))
-    """
-    cols = collections if collections is not None else _DEFAULT_COLLECTIONS
-    itms = items if items is not None else _DEFAULT_ITEMS
+    from zotero_arxiv_daily.mendeley import build_folder_paths, parse_mendeley_datetime
 
-    def everything(generator):
-        return generator
+    def fetch_corpus():
+        folder_paths = build_folder_paths(flds)
+        document_paths = {}
+        for folder_id, document_ids in memberships.items():
+            for document_id in document_ids:
+                document_paths.setdefault(document_id, []).append(folder_paths[folder_id])
+        return [
+            CorpusPaper(
+                title=document["title"],
+                abstract=document["abstract"],
+                added_date=parse_mendeley_datetime(document.get("created") or document.get("last_modified")),
+                paths=document_paths.get(document["id"], []),
+            )
+            for document in docs
+            if not use_starred_only or document.get("starred")
+            if document.get("title") and document.get("abstract")
+        ]
 
-    def collections_fn():
-        return cols
-
-    def items_fn(**kwargs):
-        return itms
-
-    return SimpleNamespace(
-        everything=everything,
-        collections=collections_fn,
-        items=items_fn,
-    )
+    return SimpleNamespace(fetch_corpus=fetch_corpus)
 
 
 # ---------------------------------------------------------------------------

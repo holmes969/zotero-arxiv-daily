@@ -1,26 +1,43 @@
-zotero:
-  user_id: ${oc.env:ZOTERO_ID}
-  api_key: ${oc.env:ZOTERO_KEY}
-  include_path: null # Or set a list of glob patterns, e.g. ["2026/survey/**","2026/reading-group/**"]
+mendeley:
+  client_id: ${oc.env:MENDELEY_CLIENT_ID}
+  client_secret: ${oc.env:MENDELEY_CLIENT_SECRET}
+  refresh_token: ${oc.env:MENDELEY_REFRESH_TOKEN}
+  access_token: ${oc.env:MENDELEY_ACCESS_TOKEN,null}
+  redirect_uri: ${oc.env:MENDELEY_REDIRECT_URI,null}
+  use_starred_only: true
+  include_path: null
 
 email:
   sender: ${oc.env:SENDER}
   receiver: ${oc.env:RECEIVER}
-  smtp_server: smtp.qq.com
-  smtp_port: 465
+  smtp_server: smtp.gmail.com
+  smtp_port: 587
   sender_password: ${oc.env:SENDER_PASSWORD}
 
 llm:
   api:
-    key: ${oc.env:OPENAI_API_KEY}
-    base_url: ${oc.env:OPENAI_API_BASE}
+    key: ${oc.env:OPENAI_API_KEY,null}
+    base_url: ${oc.env:OPENAI_API_BASE,https://api.openai.com/v1}
   generation_kwargs:
     model: gpt-4o-mini
 
 source:
   arxiv:
     category: ["cs.AI","cs.CV","cs.LG","cs.CL"]
+  huggingface_trending:
+    max_results: 50
+  arxiv_weekly:
+    category: ["cs.AI","cs.CV","cs.LG","cs.CL"]
+    lookback_days: 7
+    max_results: 200
+    min_first_last_author_max_citations: 1000
+    semantic_scholar_api_key: ${oc.env:SEMANTIC_SCHOLAR_API_KEY,null}
 
 executor:
   debug: ${oc.env:DEBUG,null}
-  source: ['arxiv']
+  source: ['huggingface_trending', 'arxiv_weekly']
+  reranker: tfidf
+  per_source_top_k:
+    huggingface_trending: 5
+    arxiv_weekly: 5
+  history_path: outputs/recommended_history.json

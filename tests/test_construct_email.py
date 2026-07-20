@@ -5,11 +5,21 @@ from tests.canned_responses import make_sample_paper
 
 
 def test_render_email_with_papers():
-    papers = [make_sample_paper(score=7.5, tldr="A great paper.", affiliations=["MIT"])]
+    papers = [
+        make_sample_paper(
+            score=7.5,
+            tldr="A great paper.",
+            abstract="This is the full paper abstract.",
+            citation_count=42,
+            source="huggingface_trending",
+        )
+    ]
     html = render_email(papers)
     assert "Sample Paper Title" in html
     assert "A great paper." in html
-    assert "MIT" in html
+    assert "This is the full paper abstract." in html
+    assert "Paper Citations:</strong> 42" in html
+    assert "Recommendation Source:</strong> Hugging Face Trending" in html
 
 
 def test_render_email_empty_list():
@@ -27,24 +37,13 @@ def test_render_email_author_truncation():
     assert "..." in html
     assert "Author 8" in html
     assert "Author 9" in html
-    # Middle authors should be truncated
     assert "Author 5" not in html
-
-
-def test_render_email_affiliation_truncation():
-    affiliations = [f"Uni {i}" for i in range(8)]
-    paper = make_sample_paper(affiliations=affiliations, score=7.0, tldr="ok")
-    html = render_email([paper])
-    assert "Uni 0" in html
-    assert "Uni 4" in html
-    assert "..." in html
-    assert "Uni 7" not in html
 
 
 def test_render_email_no_affiliations():
     paper = make_sample_paper(affiliations=None, score=7.0, tldr="ok")
     html = render_email([paper])
-    assert "Unknown Affiliation" in html
+    assert "Unknown Affiliation" not in html
 
 
 def test_get_stars_low_score():
@@ -64,13 +63,15 @@ def test_get_stars_mid_score():
 
 
 def test_get_block_html_contains_all_fields():
-    html = get_block_html("Title", "Auth", "3.5", "Summary", "http://pdf.url", "MIT")
+    html = get_block_html("Title", "Auth", "3.5", "Summary", "http://pdf.url", "Abstract", "arXiv Weekly", "12")
     assert "Title" in html
     assert "Auth" in html
     assert "3.5" in html
     assert "Summary" in html
     assert "http://pdf.url" in html
-    assert "MIT" in html
+    assert "Abstract" in html
+    assert "arXiv Weekly" in html
+    assert "12" in html
 
 
 def test_get_empty_html():

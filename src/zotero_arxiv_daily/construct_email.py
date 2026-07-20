@@ -1,4 +1,5 @@
 from .protocol import Paper
+from html import escape
 import math
 
 
@@ -52,7 +53,16 @@ def get_empty_html():
   """
   return block_template
 
-def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affiliations:str=None):
+def get_block_html(
+    title: str,
+    authors: str,
+    rate: str,
+    tldr: str,
+    pdf_url: str,
+    abstract: str,
+    source: str = "Unknown",
+    citation_count: str = "Unknown",
+):
     block_template = """
     <table border="0" cellpadding="0" cellspacing="0" width="100%" style="font-family: Arial, sans-serif; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background-color: #f9f9f9;">
     <tr>
@@ -63,8 +73,13 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
     <tr>
         <td style="font-size: 14px; color: #666; padding: 8px 0;">
             {authors}
+        </td>
+    </tr>
+    <tr>
+        <td style="font-size: 14px; color: #333; padding: 8px 0;">
+            <strong>Recommendation Source:</strong> {source}
             <br>
-            <i>{affiliations}</i>
+            <strong>Paper Citations:</strong> {citation_count}
         </td>
     </tr>
     <tr>
@@ -77,6 +92,11 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
             <strong>TLDR:</strong> {tldr}
         </td>
     </tr>
+    <tr>
+        <td style="font-size: 14px; color: #333; padding: 8px 0;">
+            <strong>Abstract:</strong> {abstract}
+        </td>
+    </tr>
 
     <tr>
         <td style="padding: 8px 0;">
@@ -85,7 +105,16 @@ def get_block_html(title:str, authors:str, rate:str, tldr:str, pdf_url:str, affi
     </tr>
 </table>
 """
-    return block_template.format(title=title, authors=authors,rate=rate, tldr=tldr, pdf_url=pdf_url, affiliations=affiliations)
+    return block_template.format(
+        title=title,
+        authors=authors,
+        rate=rate,
+        tldr=tldr,
+        pdf_url=pdf_url,
+        abstract=abstract,
+        source=source,
+        citation_count=citation_count,
+    )
 
 def get_stars(score:float):
     full_star = '<span class="full-star">⭐</span>'
@@ -112,20 +141,40 @@ def render_email(papers:list[Paper]) -> str:
     for p in papers:
         #rate = get_stars(p.score)
         rate = round(p.score, 1) if p.score is not None else 'Unknown'
-        author_list = [a for a in p.authors]
-        num_authors = len(author_list)
-        if num_authors <= 5:
-            authors = ', '.join(author_list)
-        else:
-            authors = ', '.join(author_list[:3] + ['...'] + author_list[-2:])
-        if p.affiliations is not None:
-            affiliations = p.affiliations[:5]
-            affiliations = ', '.join(affiliations)
-            if len(p.affiliations) > 5:
-                affiliations += ', ...'
-        else:
-            affiliations = 'Unknown Affiliation'
-        parts.append(get_block_html(p.title, authors, rate, p.tldr, p.pdf_url, affiliations))
+        authors = format_authors(p)
+        citation_count = str(p.citation_count) if p.citation_count is not None else "Unknown"
+        parts.append(
+            get_block_html(
+                escape(p.title),
+                authors,
+                str(rate),
+                escape(p.tldr or "Not generated"),
+                escape(p.pdf_url or p.url),
+                escape(p.abstract or "Unknown"),
+                source_label(p.source),
+                citation_count,
+            )
+        )
 
     content = '<br>' + '</br><br>'.join(parts) + '</br>'
     return framework.replace('__CONTENT__', content)
+
+
+def source_label(source: str) -> str:
+    labels = {
+        "huggingface_trending": "Hugging Face Trending",
+        "arxiv_weekly": "arXiv Weekly",
+        "arxiv": "arXiv",
+        "biorxiv": "bioRxiv",
+        "medrxiv": "medRxiv",
+    }
+    return labels.get(source, source)
+
+
+def format_authors(paper: Paper) -> str:
+    if not paper.authors:
+        return "Unknown Authors"
+    author_list = [escape(author) for author in paper.authors]
+    if len(author_list) <= 5:
+        return ", ".join(author_list)
+    return ", ".join(author_list[:3] + ["..."] + author_list[-2:])

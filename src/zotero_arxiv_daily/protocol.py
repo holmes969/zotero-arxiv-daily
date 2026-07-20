@@ -16,9 +16,12 @@ class Paper:
     abstract: str
     url: str
     pdf_url: Optional[str] = None
+    source_id: Optional[str] = None
     full_text: Optional[str] = None
     tldr: Optional[str] = None
     affiliations: Optional[list[str]] = None
+    author_affiliations: Optional[list[Optional[str]]] = None
+    citation_count: Optional[int] = None
     score: Optional[float] = None
 
     def _generate_tldr_with_llm(self, openai_client:OpenAI,llm_params:dict) -> str:

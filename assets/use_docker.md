@@ -34,8 +34,9 @@ mkdir -p logs models
 environment:
     environment:
       # 必填参数（示例值）
-      - ZOTERO_ID=1234567
-      - ZOTERO_KEY=AbCdEfGhIjKlMnOpQrStUvWx
+      - MENDELEY_CLIENT_ID=123456
+      - MENDELEY_CLIENT_SECRET=xzcdoG8wmRrf7Npm
+      - MENDELEY_REFRESH_TOKEN=MSwxMDM...
       - SMTP_SERVER=smtp.example.com
       - SMTP_PORT=465
       - SENDER=your_email@example.com
@@ -43,7 +44,7 @@ environment:
       - RECEIVER=receiver_email@example.com
 
       # 可选参数（带默认值）
-      - ZOTERO_IGNORE=already_read_papers
+      - MENDELEY_IGNORE=already_read_papers
       - ARXIV_QUERY=cs.AI+cs.CV+cs.LG+cs.CL
       - SEND_EMPTY=False
       - MAX_PAPER_NUM=5

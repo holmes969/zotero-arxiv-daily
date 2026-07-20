@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Zotero-arXiv-Daily recommends new arXiv/bioRxiv/medRxiv papers based on a user's Zotero library. It computes embedding similarity between new papers and the user's existing library, generates TLDRs via LLM, and delivers results by email. Designed to run as a GitHub Actions workflow at zero cost.
+Mendeley-arXiv-Daily recommends new arXiv/bioRxiv/medRxiv papers based on a user's Mendeley library. It computes embedding similarity between new papers and the user's existing library, generates TLDRs via LLM, and delivers results by email. Designed to run as a GitHub Actions workflow at zero cost.
 
 ## Commands
 
@@ -31,10 +31,10 @@ No linter or formatter is configured.
 
 The app follows a linear pipeline orchestrated by `Executor` (`src/zotero_arxiv_daily/executor.py`):
 
-1. **Fetch Zotero corpus** — retrieves user's library papers via pyzotero API
-2. **Filter corpus** — applies `include_path` glob patterns to select relevant collections
+1. **Fetch Mendeley corpus** — retrieves user's library papers via the Mendeley API
+2. **Filter corpus** — applies `include_path` and `ignore_path` glob patterns to select relevant folders
 3. **Retrieve new papers** — fetches from configured sources (arXiv RSS, bioRxiv/medRxiv REST API)
-4. **Rerank** — scores candidates by weighted similarity to corpus (newer Zotero papers weighted higher)
+4. **Rerank** — scores candidates by weighted similarity to corpus (newer Mendeley papers weighted higher)
 5. **Generate TLDRs + affiliations** — via OpenAI-compatible LLM API
 6. **Render + send email** — HTML email via SMTP
 
