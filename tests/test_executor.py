@@ -405,3 +405,33 @@ def test_retrieve_and_rerank_by_source_applies_top_k_and_deduplicates(config):
     selected = executor.retrieve_and_rerank_by_source(make_sample_corpus())
 
     assert [paper.title for paper in selected] == ["Shared HF", "arXiv Only"]
+
+
+def test_retrieve_and_rerank_by_source_skips_failed_source(config):
+    from types import SimpleNamespace
+
+    from tests.canned_responses import make_sample_corpus, make_sample_paper
+    from zotero_arxiv_daily.history import RecommendationHistory
+
+    good_paper = make_sample_paper(source="arxiv_weekly", source_id="2607.00002", title="Good Source Paper")
+
+    def failing_retrieve():
+        raise RuntimeError("temporary source outage")
+
+    executor = Executor.__new__(Executor)
+    executor.config = config
+    executor.history = RecommendationHistory(None)
+    executor.retrievers = {
+        "huggingface_trending": SimpleNamespace(retrieve_papers=failing_retrieve),
+        "arxiv_weekly": SimpleNamespace(retrieve_papers=lambda: [good_paper]),
+    }
+
+    class StubReranker:
+        def rerank(self, papers, corpus):
+            return papers
+
+    executor.reranker = StubReranker()
+
+    selected = executor.retrieve_and_rerank_by_source(make_sample_corpus())
+
+    assert selected == [good_paper]

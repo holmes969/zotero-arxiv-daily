@@ -163,3 +163,52 @@ def test_huggingface_trending_parses_unique_ids(monkeypatch):
     raw = retriever._retrieve_raw_papers()
 
     assert [paper.title for paper in raw] == ["Paper A", "Paper B"]
+
+
+def test_huggingface_trending_skips_failed_arxiv_metadata_batch(monkeypatch):
+    html = """
+    <a href="/papers/2607.00001">A</a>
+    <a href="/papers/2607.00002">B</a>
+    <a href="/papers/2607.00003">C</a>
+    <a href="/papers/2607.00004">D</a>
+    <a href="/papers/2607.00005">E</a>
+    <a href="/papers/2607.00006">F</a>
+    """
+    monkeypatch.setattr(
+        "zotero_arxiv_daily.retriever.huggingface_trending_retriever.requests.get",
+        lambda *args, **kwargs: StubResponse(text=html),
+    )
+
+    class StubClient:
+        def __init__(self, *args, **kwargs):
+            self.calls = 0
+
+        def results(self, search):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("arXiv rate limited")
+            return [
+                SimpleNamespace(
+                    title="Paper F",
+                    authors=[SimpleNamespace(name="Author F")],
+                    summary="Abstract F",
+                    pdf_url="https://arxiv.org/pdf/2607.00006",
+                    get_short_id=lambda: "2607.00006v1",
+                )
+            ]
+
+    monkeypatch.setattr(
+        "zotero_arxiv_daily.retriever.huggingface_trending_retriever.arxiv.Client",
+        StubClient,
+    )
+    config = OmegaConf.create(
+        {
+            "source": {"huggingface_trending": {"max_results": 6}},
+            "executor": {"debug": False},
+        }
+    )
+    retriever = HuggingFaceTrendingRetriever(config)
+
+    raw = retriever._retrieve_raw_papers()
+
+    assert [paper.title for paper in raw] == ["Paper F"]

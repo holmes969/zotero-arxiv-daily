@@ -36,11 +36,15 @@ class HuggingFaceTrendingRetriever(BaseRetriever):
             logger.warning("No Hugging Face Trending papers found.")
             return []
 
-        client = arxiv.Client(num_retries=5, delay_seconds=5)
+        client = arxiv.Client(num_retries=8, delay_seconds=20)
         results: list[arxiv.Result] = []
-        for i in range(0, len(paper_ids), 20):
-            search = arxiv.Search(id_list=paper_ids[i : i + 20])
-            results.extend(client.results(search))
+        for i in range(0, len(paper_ids), 5):
+            batch = paper_ids[i : i + 5]
+            search = arxiv.Search(id_list=batch)
+            try:
+                results.extend(client.results(search))
+            except Exception as exc:
+                logger.warning(f"Skipping Hugging Face Trending arXiv metadata batch {batch}: {exc}")
         return results
 
     def convert_to_paper(self, raw_paper: arxiv.Result) -> Paper:
