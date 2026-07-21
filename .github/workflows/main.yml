@@ -2,8 +2,8 @@ name: Send emails daily
 on:
   workflow_dispatch:
   schedule:
-    # 09:00 Pacific Standard Time. During daylight saving time this runs at 10:00 Pacific Daylight Time.
-    - cron: '0 17 * * *'
+    # 09:00 Pacific Daylight Time. Change to 17:00 UTC when Pacific time returns to standard time.
+    - cron: '0 16 * * *'
 
 jobs:
   calculate-and-send:
