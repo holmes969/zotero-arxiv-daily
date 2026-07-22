@@ -2,8 +2,9 @@ name: Send emails daily
 on:
   workflow_dispatch:
   schedule:
-    # 09:00 Pacific Daylight Time. Change to 17:00 UTC when Pacific time returns to standard time.
-    - cron: '0 16 * * *'
+    # GitHub can delay or drop schedules at the top of the hour, so use 09:17 Pacific.
+    - cron: '17 9 * * *'
+      timezone: "America/Los_Angeles"
 
 jobs:
   calculate-and-send:
